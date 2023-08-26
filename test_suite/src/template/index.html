@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+
+    <style>
+        #name-col {
+            color: red;
+        }
+
+        .customClass {
+            background-color: blue;
+        }
+
+        table {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <button class="btn btn-primary">Click me</button>
+
+        <div class="row my-4">
+            <div class="col-6">
+                <img src="./assets/image.jpg" alt="" />
+            </div>
+            <div class="col-6">
+                <img src="./assets/building_websites.svg" alt="" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col target">Name</div>
+            <div id="name-col" class="col source">%%name%%</div>
+
+            <div class="col target">Name</div>
+            <div class="col source">%%name%%</div>
+        </div>
+        <div class="row">
+            <div class="col target">Surname</div>
+            <div class="col">%%surname%%</div>
+
+            <div class="col">Surname</div>
+            <div class="col">%%surname%%</div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <inject-table items="data">
+                    <inject-column prop="index" label="#" />
+                    <inject-column prop="name" label="Name" />
+                    <inject-column prop="surname" label="Surname" />
+                    <inject-column prop="email" label="Email" />
+                </inject-table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <inject-table items="data" class="customClass">
+                    <inject-column prop="index" label="#" />
+                    <inject-column prop="name" label="Name" />
+                    <inject-column prop="surname" label="Surname" />
+                    <inject-column prop="oooooo" label="Email" />
+                </inject-table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <inject-table items="data">
+                    <inject-column prop="index" label="#" />
+                    <inject-column prop="name" label="Name" />
+                    <inject-column prop="surname" label="Surname" />
+                </inject-table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <inject-table items="another_table">
+                    <inject-column prop="name" label="Name" />
+                    <inject-column prop="surname" label="Surname" />
+                </inject-table>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <inject-table items="nullable_table">
+                    <inject-column prop="name" label="Name" />
+                    <inject-column prop="surname" label="Surname" />
+                </inject-table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sources = document.querySelectorAll('.source');
+
+        for (const source of sources) {
+            const target = getTarget(source);
+            if (target == null) {
+                continue;
+            }
+
+            const observer = new MutationObserver((mutationsList) => {
+                for (const mutation of mutationsList) {
+                    if (mutation.attributeName !== 'style') {
+                        continue;
+                    }
+
+                    const displayValue = mutation.target.style.display;
+                    target.style.display = displayValue;
+                }
+            });
+
+            observer.observe(source, { attributes: true });
+        }
+
+        function getTarget(source) {
+            let target = source.previousElementSibling;
+            if (target == null || !target.classList.contains('target')) {
+                target = source.nextElementSibling;
+                if (target == null || !target.classList.contains('target')) {
+                    return null;
+                }
+            }
+
+            return target;
+        }
+    </script>
+</body>
+
+</html>
