@@ -217,7 +217,13 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
         ..Default::default()
     };
 
-    tokio::task::spawn_blocking(move || tab.print_to_pdf(Some(print_options))).await?
+    tokio::task::spawn_blocking(move || {
+        let res = tab.print_to_pdf(Some(print_options));
+        _ = tab.close(true);
+
+        res
+    })
+    .await?
 }
 
 fn inject_js(tab: &Tab, js: &str) -> Result<()> {
