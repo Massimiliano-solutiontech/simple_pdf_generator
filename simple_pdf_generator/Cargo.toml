@@ -1,6 +1,15 @@
 [package]
 name = "simple_pdf_generator"
 version = "0.1.0"
+authors = ["Massimiliano Montagni <massimiliano@solutiontech.tech>"]
+categories = ["template-engine", "rendering", "visualization", "graphics"]
+description = "A simple PDF generator based on headless Chromium"
+documentation = "https://github.com/Massimiliano-solutiontech/simple_pdf_generator/README.md"
+homepage = "https://github.com/Massimiliano-solutiontech/simple_pdf_generator"
+keywords = ["PDF", "HTML", "Chromium", "headless", "rendering"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Massimiliano-solutiontech/simple_pdf_generator"
 edition = "2021"
 
 [dependencies]
