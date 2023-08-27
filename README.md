@@ -5,7 +5,6 @@ Rust library that converts HTML5 files to PDFs. That's the Rust version of [simp
 ## Installation
 
 This is a Rust library available through [crates.io](https://crates.io/crates/simple_pdf_generator).
-Before installing, download and install Node.js.
 
 Installation is done using cargo add command:
 
