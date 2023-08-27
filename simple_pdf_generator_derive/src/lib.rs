@@ -9,7 +9,7 @@ pub fn pdf_template_property(input: TokenStream) -> TokenStream {
 
     let struct_fields = match input.data {
         Data::Struct(ref data) => &data.fields,
-        _ => panic!("InspectProperties can only be derived for structs"),
+        _ => panic!("PdfTemplate can only be derived for structs"),
     };
 
     let inspect_struct_fields = struct_fields.iter().map(|field| {
