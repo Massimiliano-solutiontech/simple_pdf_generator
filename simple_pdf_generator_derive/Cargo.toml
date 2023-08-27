@@ -1,6 +1,6 @@
 [package]
 name = "simple_pdf_generator_derive"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Massimiliano Montagni <massimiliano@solutiontech.tech>"]
 categories = ["template-engine", "rendering", "visualization", "graphics"]
 description = "Macros for simple_pdf_generator"
