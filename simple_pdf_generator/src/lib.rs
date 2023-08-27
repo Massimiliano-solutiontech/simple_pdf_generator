@@ -14,6 +14,7 @@ use rayon::str::ParallelString;
 use regex::Regex;
 
 use once_cell::sync::Lazy;
+use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub enum AssetType {
@@ -41,18 +42,14 @@ pub struct Asset {
     pub r#type: AssetType,
 }
 
-static BROWSER: Lazy<Browser> = Lazy::new(|| {
+static BROWSER: Lazy<RwLock<Browser>> = Lazy::new(|| {
     let options = LaunchOptions::default_builder()
         .headless(true)
         .build()
         .expect("Couldn't find appropriate Chrome binary.");
     let browser = Browser::new(options).expect("Couldn't create browser.");
-    let tabs = browser.get_tabs().lock().unwrap();
-    for tab in tabs.iter() {
-        _ = tab.close(true);
-    }
 
-    browser.clone()
+    RwLock::new(browser)
 });
 
 static TOKENS_AND_IMAGES_REGEX: Lazy<Regex> = Lazy::new(|| {
@@ -113,16 +110,35 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
         .collect::<String>();
 
     let html = urlencoding::encode(&html).to_string();
+    let browser_lock = BROWSER.read().await;
+    let tab = match browser_lock.new_tab() {
+        Ok(tab) => {
+            drop(browser_lock);
+            tab
+        }
+        Err(_) => {
+            drop(browser_lock);
+
+            let mut browser = BROWSER.write().await;
+            let options = LaunchOptions::default_builder()
+                .headless(true)
     let tab = tokio::task::spawn_blocking(move || {
         let tab = BROWSER.new_tab().unwrap();
         tab.navigate_to(&format!("data:text/html,{}", html))
             .unwrap()
             .wait_until_navigated()
             .unwrap();
+                .build()
+                .expect("Couldn't find appropriate Chrome binary.");
+            *browser = Browser::new(options).expect("Couldn't create browser.");
+            browser.new_tab()?
+        }
+    };
 
-        tab
-    })
-    .await?;
+    tab.navigate_to(&format!("data:text/html,{}", html))
+        .unwrap()
+        .wait_until_navigated()
+        .unwrap();
 
     let mut asset_content_futures = Vec::new();
     for asset in assets {
