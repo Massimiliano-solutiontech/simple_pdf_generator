@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -45,6 +46,7 @@ pub struct Asset {
 static BROWSER: Lazy<RwLock<Browser>> = Lazy::new(|| {
     let options = LaunchOptions::default_builder()
         .headless(true)
+        .idle_browser_timeout(Duration::MAX)
         .build()
         .expect("Couldn't find appropriate Chrome binary.");
     let browser = Browser::new(options).expect("Couldn't create browser.");
@@ -122,12 +124,7 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
             let mut browser = BROWSER.write().await;
             let options = LaunchOptions::default_builder()
                 .headless(true)
-    let tab = tokio::task::spawn_blocking(move || {
-        let tab = BROWSER.new_tab().unwrap();
-        tab.navigate_to(&format!("data:text/html,{}", html))
-            .unwrap()
-            .wait_until_navigated()
-            .unwrap();
+                .idle_browser_timeout(Duration::MAX)
                 .build()
                 .expect("Couldn't find appropriate Chrome binary.");
             *browser = Browser::new(options).expect("Couldn't create browser.");
