@@ -211,10 +211,10 @@ In the HTML file write this:
 
 `generate_pdf(html_path: std::path::PathBuf, assets: &[simple_pdf_generator::Asset]) -> Result<Vec<u8>, Box<dyn std::error::Error>>` returns the PDF file as a `Vec<u8>`.
 
-| Parameter                                | Description                         |
-| ---------------------------------------- | ----------------------------------- |
-| `html_path: std::path::PathBuf`          | PDF output dir                      |
-| `assets: &[simple_pdf_generator::Asset]` | Object with `Puppeteer PDF Options` |
+| Parameter                                | Description                                 |
+| ---------------------------------------- | ------------------------------------------- |
+| `html_path: std::path::PathBuf`          | PDF output dir                              |
+| `assets: &[simple_pdf_generator::Asset]` | Vector of assets (it can be empty `vec![]`) |
 
 ### `simple_pdf_generator::{Asset, AssetType}`
 
