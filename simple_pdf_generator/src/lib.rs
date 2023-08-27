@@ -70,12 +70,12 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
             let mut result = String::new();
 
             if let Some(prop_name) = prop_name {
-                if let Some(value) = template.properties.get(prop_name) {
-                    if value.is_none {
+                if let Some(property) = template.properties.get(prop_name) {
+                    if property.is_none {
                         xpath_texts.push(format!("text() = '{}'", prop_name));
                         result = prop_name.to_string();
                     } else {
-                        result = value.val.clone();
+                        result = html_escape::encode_text(&property.val).to_string()
                     }
                 }
             } else if let Some(img_src) = img_src {
@@ -181,7 +181,8 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
         }
         tables_data.push('}');
 
-        let table_generator_js = table_generator_js.replacen("tablesData", &tables_data, 1);
+        let table_generator_js =
+            table_generator_js.replacen("tablesData", &html_escape::encode_text(&tables_data), 1);
         let tab = tab.clone();
         _ = tokio::task::spawn_blocking(move || tab.evaluate(&table_generator_js, false)).await?;
     }
