@@ -1,10 +1,4 @@
-/* eslint-disable no-undef */
-const tables = [];
 const tablesData;
-
-document.addEventListener('start', () => {
-    createTables();
-});
 
 function createTables() {
     const tablesTag = [...document.getElementsByTagName('inject-table')];
@@ -56,20 +50,16 @@ function createTables() {
         }
 
         table.replaceWith(newTable);
-        tables.push(newTable);
 
         populateTable(newTable);
     }
 }
 
 function populateTable(table) {
-    const tableFound = tables.find((documentTable) => documentTable === table);
-    if (tableFound === undefined) return;
+    const data = Reflect.get(tablesData, table.getAttribute('items'));
 
-    const data = Reflect.get(tablesData, tableFound.getAttribute('items'));
-
-    const headColumns = [...tableFound.tHead.rows[0].cells];
-    const body = tableFound.createTBody();
+    const headColumns = [...table.tHead.rows[0].cells];
+    const body = table.createTBody();
 
     for (const item of data) {
         const newRow = body.insertRow();
