@@ -77,7 +77,7 @@ pub fn pdf_template_property(input: TokenStream) -> TokenStream {
                 html_path: std::path::PathBuf,
                 assets: &[simple_pdf_generator::Asset],
                 print_options: &simple_pdf_generator::PrintOptions,
-            ) -> Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError> {
+            ) -> std::result::Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError> {
                 let mut template = simple_pdf_generator::Template::default();
                 template.html_path = html_path;
                 #(#inspect_struct_fields)*
