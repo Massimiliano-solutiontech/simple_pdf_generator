@@ -1,5 +1,6 @@
 [workspace]
 members = ["simple_pdf_generator", "simple_pdf_generator_derive", "test_suite"]
+resolver = "2"
 
 [patch.crates-io]
 simple_pdf_generator = { path = "simple_pdf_generator" }
