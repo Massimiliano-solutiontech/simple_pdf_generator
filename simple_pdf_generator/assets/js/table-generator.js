@@ -7,7 +7,6 @@ function createTables() {
         const columns = [...table.getElementsByTagName('inject-column')];
 
         const newTable = document.createElement('table');
-        const head = newTable.createTHead().insertRow();
 
         const classAttribute = table.getAttribute('class');
         if (classAttribute != null) {
@@ -29,6 +28,7 @@ function createTables() {
             newTable.setAttribute('items', itemAttribute);
         }
 
+        const head = newTable.createTHead().insertRow();
         for (const column of columns.values()) {
             const cell = document.createElement('th');
 
@@ -45,6 +45,9 @@ function createTables() {
             }
 
             cell.innerText = column.getAttribute('label');
+            if (column.getAttribute('label') == null) {
+                cell.style.display = 'none';
+            }
 
             head.appendChild(cell);
         }
