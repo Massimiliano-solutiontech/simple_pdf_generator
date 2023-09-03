@@ -230,7 +230,7 @@ async generate_pdf(
     html_path: std::path::PathBuf,
     assets: &[simple_pdf_generator::Asset],
     print_options: &simple_pdf_generator::PrintOptions
-) -> Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError>
+) -> std::result::Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError>
 ```
 
 returns the PDF file as a `Vec<u8>`.
