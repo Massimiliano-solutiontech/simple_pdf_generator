@@ -1,26 +1,44 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use base64::engine::general_purpose;
 use base64::Engine;
-
-use headless_chrome::{types::PrintToPdfOptions, Browser, LaunchOptions, Tab};
-
-use anyhow::Result;
-use futures::future::join_all;
-use rayon::prelude::ParallelIterator;
-use rayon::str::ParallelString;
-use regex::Regex;
-
+use chromiumoxide::browser::{Browser, BrowserConfig};
+use chromiumoxide::cdp::browser_protocol::page::PrintToPdfParams;
+use chromiumoxide::error::CdpError;
+use chromiumoxide::js::EvaluationResult;
+use chromiumoxide::Page;
+use futures::future::try_join_all;
+use futures::StreamExt;
 use once_cell::sync::Lazy;
+use regex::Regex;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub enum AssetType {
     Style,
     Script,
+}
+
+#[derive(Debug)]
+pub enum SimplePdfGeneratorError {
+    BrowserError(String),
+    IoError(String),
+    PdfError(String),
+}
+
+impl Display for SimplePdfGeneratorError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SimplePdfGeneratorError::BrowserError(msg) => {
+                write!(f, "Browser error: {}", msg)
+            }
+            SimplePdfGeneratorError::IoError(msg) => write!(f, "IO error: {}", msg),
+            SimplePdfGeneratorError::PdfError(msg) => write!(f, "PDF error: {}", msg),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -43,26 +61,99 @@ pub struct Asset {
     pub r#type: AssetType,
 }
 
-static BROWSER: Lazy<RwLock<Browser>> = Lazy::new(|| {
-    let options = LaunchOptions::default_builder()
-        .headless(true)
-        .idle_browser_timeout(Duration::MAX)
-        .build()
-        .expect("Couldn't find appropriate Chrome binary.");
-    let browser = Browser::new(options).expect("Couldn't create browser.");
+pub struct PrintOptions {
+    pub print_background: bool,
+    pub paper_width: Option<f64>,
+    pub paper_height: Option<f64>,
+    pub margin_top: Option<f64>,
+    pub margin_bottom: Option<f64>,
+    pub margin_left: Option<f64>,
+    pub margin_right: Option<f64>,
+    pub page_ranges: Option<String>,
+    pub prefer_css_page_size: bool,
+    pub landscape: bool,
+}
 
-    RwLock::new(browser)
-});
+impl Default for PrintOptions {
+    fn default() -> Self {
+        Self {
+            print_background: true,
+            paper_width: None,
+            paper_height: None,
+            margin_top: Some(0.0),
+            margin_bottom: Some(0.0),
+            margin_left: Some(0.0),
+            margin_right: Some(0.0),
+            page_ranges: None,
+            prefer_css_page_size: false,
+            landscape: false,
+        }
+    }
+}
 
+impl From<&PrintOptions> for PrintToPdfParams {
+    fn from(val: &PrintOptions) -> Self {
+        PrintToPdfParams {
+            print_background: Some(val.print_background),
+            paper_width: val.paper_width.map(|val| val / 25.4),
+            paper_height: val.paper_height.map(|val| val / 25.4),
+            margin_top: val.margin_top.map(|val| val / 25.4),
+            margin_bottom: val.margin_bottom.map(|val| val / 25.4),
+            margin_left: val.margin_left.map(|val| val / 25.4),
+            margin_right: val.margin_right.map(|val| val / 25.4),
+            landscape: Some(val.landscape),
+            ..Default::default()
+        }
+    }
+}
+
+struct ChromiumInstance {
+    browser: Browser,
+}
+
+impl ChromiumInstance {
+    async fn new() -> Self {
+        let options = BrowserConfig::builder()
+            .build()
+            .expect("Invalid browser options.");
+        let (browser, mut handler) = Browser::launch(options)
+            .await
+            .expect("Couldn't create browser.");
+
+        tokio::task::spawn(async move {
+            while let Some(h) = handler.next().await {
+                if h.is_err() {
+                    break;
+                }
+            }
+
+            let write_guard = BROWSER.try_write();
+            if let Ok(mut guard) = write_guard {
+                *guard = None;
+            }
+        });
+
+        ChromiumInstance { browser }
+    }
+}
+
+static BROWSER: Lazy<RwLock<Option<ChromiumInstance>>> = Lazy::new(|| RwLock::new(None));
 static TOKENS_AND_IMAGES_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?:%%(?P<prop_name>.*)%%)|(?:<img[^>]*\ssrc="(?P<img_src>.*?)"[^>]*>)"#).unwrap()
 });
 
-pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8>> {
-    let html = tokio::fs::read_to_string(template.html_path.clone()).await?;
+pub async fn generate_pdf(
+    template: Template,
+    assets: &[Asset],
+    print_options: &PrintOptions,
+) -> Result<Vec<u8>, SimplePdfGeneratorError> {
+    let html = tokio::fs::read_to_string(template.html_path.clone())
+        .await
+        .map_err(|e| {
+            SimplePdfGeneratorError::IoError(format!("Cannot read the html file: {}", e))
+        })?;
 
     let mut xpath_texts: Vec<String> = Vec::new();
-
     let html = TOKENS_AND_IMAGES_REGEX
         .replace_all(&html, |caps: &regex::Captures| {
             let prop_name = caps.name("prop_name").map(|prop_name| prop_name.as_str());
@@ -108,64 +199,51 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
 
             result
         })
-        .par_chars()
-        .collect::<String>();
+        .to_string();
 
-    let html = urlencoding::encode(&html).to_string();
-    let browser_lock = BROWSER.read().await;
-    let tab = match browser_lock.new_tab() {
-        Ok(tab) => {
-            drop(browser_lock);
-            tab
-        }
-        Err(_) => {
-            drop(browser_lock);
-
-            let mut browser = BROWSER.write().await;
-            let options = LaunchOptions::default_builder()
-                .headless(true)
-                .idle_browser_timeout(Duration::MAX)
-                .build()
-                .expect("Couldn't find appropriate Chrome binary.");
-            *browser = Browser::new(options).expect("Couldn't create browser.");
-            browser.new_tab()?
-        }
-    };
-
-    tab.navigate_to(&format!("data:text/html,{}", html))
-        .unwrap()
-        .wait_until_navigated()
-        .unwrap();
+    let browser = get_browser().await;
+    let browser_instance = browser
+        .as_ref()
+        .ok_or(SimplePdfGeneratorError::BrowserError(
+            "Cannot create the browser".to_string(),
+        ))?;
+    let page = browser_instance
+        .browser
+        .new_page("about:blank")
+        .await
+        .map_err(|e| {
+            SimplePdfGeneratorError::BrowserError(format!("Cannot create the page: {}", e))
+        })?;
+    page.set_content(html).await.map_err(|e| {
+        SimplePdfGeneratorError::BrowserError(format!("Cannot set the content: {}", e))
+    })?;
 
     let mut asset_content_futures = Vec::new();
     for asset in assets {
         asset_content_futures.push(tokio::fs::read_to_string(asset.path.clone()));
     }
 
-    let asset_contents = join_all(asset_content_futures).await;
-    let mut inject_futures = Vec::new();
+    let asset_contents = try_join_all(asset_content_futures)
+        .await
+        .map_err(|e| SimplePdfGeneratorError::IoError(format!("Cannot read the asset: {}", e)))?;
+    let mut inject_futures_css = Vec::new();
+    let mut inject_futures_js = Vec::new();
     for (index, asset_content) in asset_contents.into_iter().enumerate() {
-        let Ok(asset_data) = asset_content else {
-            continue;
-        };
-        let asset = &assets[index];
-        let tab = tab.clone();
-
-        match asset.r#type {
+        match assets[index].r#type {
             AssetType::Style => {
-                inject_futures.push(tokio::task::spawn_blocking(move || {
-                    inject_css(&tab, &asset_data)
-                }));
+                inject_futures_css.push(inject_css(&page, asset_content));
             }
             AssetType::Script => {
-                inject_futures.push(tokio::task::spawn_blocking(move || {
-                    inject_js(&tab, &asset_data)
-                }));
+                inject_futures_js.push(inject_js(&page, asset_content));
             }
         }
     }
-
-    let _ = join_all(inject_futures).await;
+    try_join_all(inject_futures_css).await.map_err(|e| {
+        SimplePdfGeneratorError::BrowserError(format!("Cannot inject the css: {}", e))
+    })?;
+    try_join_all(inject_futures_js).await.map_err(|e| {
+        SimplePdfGeneratorError::BrowserError(format!("Cannot inject the js: {}", e))
+    })?;
 
     if !template.tables.is_empty() {
         let table_generator_js: &'static str = include_str!("../assets/js/table-generator.js");
@@ -183,8 +261,9 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
 
         let table_generator_js =
             table_generator_js.replacen("tablesData", &html_escape::encode_text(&tables_data), 1);
-        let tab = tab.clone();
-        _ = tokio::task::spawn_blocking(move || tab.evaluate(&table_generator_js, false)).await?;
+        _ = page.evaluate(table_generator_js).await.map_err(|e| {
+            SimplePdfGeneratorError::BrowserError(format!("Cannot evaluate the js: {}", e))
+        })?;
     }
 
     if !xpath_texts.is_empty() {
@@ -194,7 +273,7 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
         );
         let js_script = format!(
             "
-            function hideNoneElements() {{
+            () => {{
                 const xpathExpression = `{}`;
                 const result = document.evaluate(xpathExpression, document, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
 
@@ -203,53 +282,63 @@ pub async fn generate_pdf(template: Template, assets: &[Asset]) -> Result<Vec<u8
                     targetElement.style.display = 'none';
                 }}
             }}
-            hideNoneElements();
             ",
             xpath_expression
         );
 
-        let tab = tab.clone();
-        _ = tokio::task::spawn_blocking(move || tab.evaluate(&js_script, false)).await?
+        _ = page.evaluate(js_script).await.map_err(|e| {
+            SimplePdfGeneratorError::BrowserError(format!(
+                "Cannot evaluate the xPath script: {}",
+                e
+            ))
+        })?;
     }
 
-    let print_options = PrintToPdfOptions {
-        print_background: Some(true),
-        ..Default::default()
-    };
-
-    tokio::task::spawn_blocking(move || {
-        let res = tab.print_to_pdf(Some(print_options));
-        _ = tab.close(true);
-
-        res
-    })
-    .await?
+    page.pdf(print_options.into())
+        .await
+        .map_err(|e| SimplePdfGeneratorError::PdfError(format!("Cannot create the pdf: {}", e)))
 }
 
-fn inject_js(tab: &Tab, js: &str) -> Result<()> {
-    tab.wait_for_element("head")?.call_js_fn(
-        "function() { 
+async fn inject_js(page: &Page, js: String) -> Result<EvaluationResult, CdpError> {
+    let script = format!(
+        "() => {{ 
             const script = document.createElement('script');
-            script.innerHTML = arguments[0];
+            script.innerHTML = `{}`;
             document.head.appendChild(script);
-        }",
-        vec![serde_json::Value::String(js.to_string())],
-        false,
-    )?;
+    }}",
+        js
+    );
 
-    Ok(())
+    page.evaluate(script).await
 }
 
-fn inject_css(tab: &Tab, css: &str) -> Result<()> {
-    tab.wait_for_element("head")?.call_js_fn(
-        "function() { 
+async fn inject_css(page: &Page, css: String) -> Result<EvaluationResult, CdpError> {
+    let script = format!(
+        "() => {{ 
             const style = document.createElement('style');
-            style.innerHTML = arguments[0];
+            style.innerHTML = `{}`;
             document.head.appendChild(style);
-        }",
-        vec![serde_json::Value::String(css.to_string())],
-        false,
-    )?;
+    }}",
+        css
+    );
 
-    Ok(())
+    page.evaluate(script).await
+}
+
+async fn get_browser<'a>() -> tokio::sync::RwLockReadGuard<'a, Option<ChromiumInstance>> {
+    let read_guard = BROWSER.read().await;
+    if read_guard.is_some() {
+        return read_guard;
+    }
+
+    drop(read_guard);
+
+    let mut write_guard = BROWSER.write().await;
+
+    if write_guard.is_none() {
+        *write_guard = Some(ChromiumInstance::new().await);
+    }
+
+    drop(write_guard);
+    BROWSER.read().await
 }

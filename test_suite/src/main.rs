@@ -2,7 +2,7 @@ use std::{env, time};
 
 use futures::future::join_all;
 use serde::Serialize;
-use simple_pdf_generator::{Asset, AssetType};
+use simple_pdf_generator::{Asset, AssetType, PrintOptions};
 use simple_pdf_generator_derive::PdfTemplate;
 
 #[derive(PdfTemplate)]
@@ -82,27 +82,50 @@ async fn main() {
         r#type: AssetType::Style,
     }];
 
+    let print_options = PrintOptions {
+        paper_width: Some(210.0),
+        paper_height: Some(297.0),
+        margin_top: Some(10.0),
+        margin_bottom: Some(10.0),
+        margin_left: Some(10.0),
+        margin_right: Some(10.0),
+        ..PrintOptions::default()
+    };
+
+    let start = time::Instant::now();
+    _ = test
+        .generate_pdf(html_path.clone(), &assets, &print_options)
+        .await;
+    let duration = start.elapsed();
+    println!("single completed in {:?}", duration);
+
     let start = time::Instant::now();
 
-    let gen_0 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_1 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_2 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_3 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_4 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_5 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_6 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_7 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_8 = test.generate_pdf(html_path.clone(), &assets);
-    let gen_9 = test.generate_pdf(html_path.clone(), &assets);
+    let gen_0 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_1 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_2 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_3 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_4 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_5 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_6 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_7 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_8 = test.generate_pdf(html_path.clone(), &assets, &print_options);
+    let gen_9 = test.generate_pdf(html_path.clone(), &assets, &print_options);
 
     let futures_res = join_all(vec![
         gen_0, gen_1, gen_2, gen_3, gen_4, gen_5, gen_6, gen_7, gen_8, gen_9,
     ])
     .await;
+
     let duration = start.elapsed();
     println!("completed in {:?}", duration);
 
     for res in futures_res.iter().enumerate() {
-        _ = tokio::fs::write(format!("result-{}.pdf", res.0), res.1.as_ref().unwrap()).await;
+        let Ok(content) = res.1.as_ref() else {
+            println!("Error on {} {}", res.0, res.1.as_ref().unwrap_err());
+            continue;
+        };
+
+        _ = tokio::fs::write(format!("result-{}.pdf", res.0), content).await;
     }
 }

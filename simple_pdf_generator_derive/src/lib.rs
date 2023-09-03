@@ -73,13 +73,16 @@ pub fn pdf_template_property(input: TokenStream) -> TokenStream {
 
     let impl_methods = quote! {
         impl #struct_name {
-            pub async fn generate_pdf(&self, html_path: std::path::PathBuf, assets: &[simple_pdf_generator::Asset]) -> Result<Vec<u8>, String> {
+            pub async fn generate_pdf(&self,
+                html_path: std::path::PathBuf,
+                assets: &[simple_pdf_generator::Asset],
+                print_options: &simple_pdf_generator::PrintOptions,
+            ) -> Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError> {
                 let mut template = simple_pdf_generator::Template::default();
                 template.html_path = html_path;
                 #(#inspect_struct_fields)*
 
-
-                simple_pdf_generator::generate_pdf(template, assets).await.map_err(|e| e.to_string())
+                simple_pdf_generator::generate_pdf(template, assets, print_options).await
             }
         }
     };

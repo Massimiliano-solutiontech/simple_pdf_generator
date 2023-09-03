@@ -13,16 +13,14 @@ repository = "https://github.com/Massimiliano-solutiontech/simple_pdf_generator"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.75"
+chromiumoxide = { version = "0.5.1", features = [
+    "tokio-runtime",
+], default-features = false }
 base64 = "0.21.2"
 futures = "0.3.28"
-headless_chrome = { version = "1.0.5", features = ["fetch"] }
 html-escape = "0.2.13"
 mime_guess = "2.0.4"
 once_cell = "1.18.0"
-rayon = "1.7.0"
 regex = "1.9.3"
-serde_json = "1.0.105"
 simple_pdf_generator_derive = { version = "0", path = "../simple_pdf_generator_derive" }
 tokio = { version = "1.32.0", features = ["full"] }
-urlencoding = "2.1.3"
