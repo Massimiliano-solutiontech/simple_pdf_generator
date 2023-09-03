@@ -68,8 +68,17 @@ function populateTable(table) {
         const newRow = body.insertRow();
 
         headColumns.forEach((column) => {
-            const val = Reflect.get(item, column.getAttribute('prop'));
-            newRow.insertCell().innerHTML = val == null ? '' : val;
+            let val = Reflect.get(item, column.getAttribute('prop').split('.')[0]);
+            if (val != null && typeof val === 'object') {
+                const nestedProps = column.getAttribute('prop').split('.').slice(1);
+                let nestedVal = val;
+                nestedProps.forEach((prop) => {
+                    nestedVal = Reflect.get(nestedVal, prop);
+                });
+                val = nestedVal;
+            }
+
+            newRow.insertCell().innerHTML = val ?? '';
         });
     }
 }
