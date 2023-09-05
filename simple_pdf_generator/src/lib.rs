@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -113,9 +114,14 @@ struct ChromiumInstance {
 
 impl ChromiumInstance {
     async fn new() -> Self {
-        let options = BrowserConfig::builder()
-            .build()
-            .expect("Invalid browser options.");
+        let options = BrowserConfig::builder();
+        let options = if NO_SANDBOX.load(Ordering::Relaxed) {
+            options.no_sandbox()
+        } else {
+            options
+        };
+        let options = options.build().expect("Invalid browser options.");
+
         let (browser, mut handler) = Browser::launch(options)
             .await
             .expect("Couldn't create browser.");
@@ -141,6 +147,11 @@ static BROWSER: Lazy<RwLock<Option<ChromiumInstance>>> = Lazy::new(|| RwLock::ne
 static TOKENS_AND_IMAGES_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?:%%(?P<prop_name>.*)%%)|(?:<img[^>]*\ssrc="(?P<img_src>.*?)"[^>]*>)"#).unwrap()
 });
+static NO_SANDBOX: AtomicBool = AtomicBool::new(false);
+
+pub fn set_no_sandbox(val: bool) {
+    NO_SANDBOX.store(val, Ordering::Relaxed);
+}
 
 pub async fn generate_pdf(
     template: Template,
