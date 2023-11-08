@@ -90,8 +90,6 @@ pub fn pdf_template_property(input: TokenStream) -> TokenStream {
               assets: &[simple_pdf_generator::Asset],
               print_options: &simple_pdf_generator::PrintOptions,
           ) -> std::result::Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError> {
-              #(#inspect_struct_fields)*
-
               simple_pdf_generator::generate_pdf_from_html(html_string, assets, print_options).await
           }
         }

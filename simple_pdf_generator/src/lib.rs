@@ -165,31 +165,13 @@ pub async fn generate_pdf_from_html(
             let img_src = caps.name("img_src").map(|img_src| img_src.as_str());
             let mut result = String::new();
 
-            if let Some(prop_name) = prop_name {
-                if let Some(property) = template.properties.get(prop_name) {
-                    if property.is_none {
-                        xpath_texts.push(format!("text() = '{}'", prop_name));
-                        result = prop_name.to_string();
-                    } else {
-                        result = html_escape::encode_text(&property.val).to_string()
-                    }
-                }
-            } else if let Some(img_src) = img_src {
+            if let Some(img_src) = img_src {
                 if img_src.starts_with("data:image") {
                     result = img_src.to_string();
                 } else {
                     let mime_type = mime_guess::from_path(img_src).first_raw();
                     if let Some(mime_type) = mime_type {
                         let mut img_src_path = Path::new(img_src).to_owned();
-                        if img_src_path.is_relative() {
-                            img_src_path = template
-                                .html_path
-                                .parent()
-                                .unwrap_or_else(|| Path::new(""))
-                                .join(img_src_path)
-                                .canonicalize()
-                                .unwrap_or_else(|_| PathBuf::new());
-                        }
 
                         let img_data = fs::read(img_src_path).unwrap_or(Vec::new());
                         let image_base64 = general_purpose::STANDARD.encode(img_data);
@@ -249,27 +231,6 @@ pub async fn generate_pdf_from_html(
     try_join_all(inject_futures_js).await.map_err(|e| {
         SimplePdfGeneratorError::BrowserError(format!("Cannot inject the js: {}", e))
     })?;
-
-    if !template.tables.is_empty() {
-        let table_generator_js: &'static str = include_str!("../assets/js/table-generator.js");
-
-        let mut tables_data = "tablesData = {".to_string();
-        for (table_name, mut table_data) in template.tables {
-            if table_data.is_empty() {
-                table_data = "[]".to_string();
-                xpath_texts.push(format!("@items = '{}'", table_name));
-            }
-
-            tables_data.push_str(&format!("{}:{},", table_name, table_data));
-        }
-        tables_data.push('}');
-
-        let table_generator_js =
-            table_generator_js.replacen("tablesData", &html_escape::encode_text(&tables_data), 1);
-        _ = page.evaluate(table_generator_js).await.map_err(|e| {
-            SimplePdfGeneratorError::BrowserError(format!("Cannot evaluate the js: {}", e))
-        })?;
-    }
 
     if !xpath_texts.is_empty() {
         let xpath_expression = format!(
