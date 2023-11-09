@@ -13,9 +13,7 @@ repository = "https://github.com/Massimiliano-solutiontech/simple_pdf_generator"
 edition = "2021"
 
 [dependencies]
-chromiumoxide = { version = "0.5.1", features = [
-    "tokio-runtime",
-], default-features = false }
+chromiumoxide = { version = "0.5.1", features = ["tokio-runtime", "fetcher"], default-features = false }
 base64 = "0.21.3"
 futures = "0.3.28"
 html-escape = "0.2.13"
