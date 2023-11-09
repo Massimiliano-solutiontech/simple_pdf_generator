@@ -28,7 +28,7 @@ Simple PDF Generator:
 
 ## Quick Start
 
-In order to have a template you must create struct with `PdfTemplate` derive:
+In order to have a template you must create struct with `PdfTemplate` or `PdfTemplateForHtml` derive:
 
 ```rust
 use simple_pdf_generator::{Asset, AssetType};

@@ -124,7 +124,7 @@ pub fn pdf_template_property_for_html_string(input: TokenStream) -> TokenStream 
 
     let struct_fields = match input.data {
         Data::Struct(ref data) => &data.fields,
-        _ => panic!("PdfTemplate can only be derived for structs"),
+        _ => panic!("PdfTemplateForHtml can only be derived for structs"),
     };
 
     let inspect_struct_fields = struct_fields.iter().map(|field| {
