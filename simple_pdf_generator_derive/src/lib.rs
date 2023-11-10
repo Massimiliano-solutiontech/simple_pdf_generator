@@ -190,7 +190,6 @@ pub fn pdf_template_property_for_html_string(input: TokenStream) -> TokenStream 
         impl #struct_name {
             pub async fn generate_pdf_from_html(&self,
               html_string: String,
-              attributes: 
               assets: &[simple_pdf_generator::Asset],
               print_options: &simple_pdf_generator::PrintOptions,
           ) -> std::result::Result<Vec<u8>, simple_pdf_generator::SimplePdfGeneratorError> {

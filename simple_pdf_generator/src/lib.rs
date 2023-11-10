@@ -155,10 +155,10 @@ pub fn set_no_sandbox(val: bool) {
 
 pub async fn generate_pdf_from_html(
     html: String,
+    template: Template,
     assets: &[Asset],
     print_options: &PrintOptions,
 ) -> Result<Vec<u8>, SimplePdfGeneratorError> {
-    let template = Template::default();
     let mut xpath_texts: Vec<String> = Vec::new();
     let html = TOKENS_AND_IMAGES_REGEX
         .replace_all(&html, |caps: &regex::Captures| {
