@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use base64::engine::general_purpose;
 use base64::Engine;
