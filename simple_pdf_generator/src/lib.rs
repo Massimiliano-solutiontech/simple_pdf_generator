@@ -113,11 +113,13 @@ struct ChromiumInstance {
 
 impl ChromiumInstance {
     async fn new() -> Self {
-        let options = 
-          BrowserConfig::builder()
-            .no_sandbox()
-            .build()
-            .expect("Invalid browser options.");
+        let options = BrowserConfig::builder();
+        let options = if NO_SANDBOX.load(Ordering::Relaxed) {
+            options.no_sandbox()
+        } else {
+            options
+        };
+        let options = options.build().expect("Invalid browser options.");
 
         let (browser, mut handler) = Browser::launch(options)
             .await
@@ -145,6 +147,11 @@ static TOKENS_AND_IMAGES_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?:%%(?P<prop_name>.*)%%)|(?:<img[^>]*\ssrc="(?P<img_src>.*?)"[^>]*>)"#).unwrap()
 });
 
+static NO_SANDBOX: AtomicBool = AtomicBool::new(false);
+
+pub fn set_no_sandbox(val: bool) {
+    NO_SANDBOX.store(val, Ordering::Relaxed);
+}
 
 pub async fn generate_pdf_from_html(
     html: String,
@@ -241,6 +248,27 @@ pub async fn generate_pdf_from_html(
     try_join_all(inject_futures_js).await.map_err(|e| {
         SimplePdfGeneratorError::BrowserError(format!("Cannot inject the js: {}", e))
     })?;
+
+    if !template.tables.is_empty() {
+      let table_generator_js: &'static str = include_str!("../assets/js/table-generator.js");
+
+      let mut tables_data = "tablesData = {".to_string();
+      for (table_name, mut table_data) in template.tables {
+          if table_data.is_empty() {
+              table_data = "[]".to_string();
+              xpath_texts.push(format!("@items = '{}'", table_name));
+          }
+
+          tables_data.push_str(&format!("{}:{},", table_name, table_data));
+      }
+      tables_data.push('}');
+
+      let table_generator_js =
+          table_generator_js.replacen("tablesData", &html_escape::encode_text(&tables_data), 1);
+      _ = page.evaluate(table_generator_js).await.map_err(|e| {
+          SimplePdfGeneratorError::BrowserError(format!("Cannot evaluate the js: {}", e))
+      })?;
+  }
 
     if !xpath_texts.is_empty() {
         let xpath_expression = format!(
